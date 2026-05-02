@@ -33,4 +33,18 @@ It is designed for HAOS and runs as a long‑lived service, updating pollen data
 ## Output
 
 The scraper writes:
+/share/pollen/pollen_data.json
+
+
+Example:
+
+```json
+{
+  "today": { "level": "High", "top_allergens": ["Birch", "Poplar"] },
+  "forecast": [
+    { "day": "Sun 26", "level": "High" },
+    { "day": "Mon 27", "level": "Very High" },
+    { "day": "Tue 28", "level": "Very High" }
+  ]
+}
 
