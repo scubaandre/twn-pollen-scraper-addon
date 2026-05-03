@@ -4,17 +4,17 @@ set -e
 
 echo "[TWN Pollen] Starting Weather Network Pollen Scraper add-on..."
 
-# Read options from Home Assistant
-POLLEN_URL=$(bashio::config 'pollen_url')
-SCRAPES_PER_DAY=$(bashio::config 'scrapes_per_day')
-BROWSERLESS_URL=$(bashio::config 'browserless_url')
-DEBUG_MODE=$(bashio::config 'debug_mode')
+# Read config from /data/options.json
+POLLEN_URL=$(jq -r '.pollen_url' /data/options.json)
+SCRAPES_PER_DAY=$(jq -r '.scrapes_per_day' /data/options.json)
+BROWSERLESS_URL=$(jq -r '.browserless_url' /data/options.json)
+DEBUG_MODE=$(jq -r '.debug_mode' /data/options.json)
 
-MQTT_HOST=$(bashio::config 'mqtt_host')
-MQTT_PORT=$(bashio::config 'mqtt_port')
-MQTT_USERNAME=$(bashio::config 'mqtt_username')
-MQTT_PASSWORD=$(bashio::config 'mqtt_password')
-MQTT_BASE_TOPIC=$(bashio::config 'mqtt_base_topic')
+MQTT_HOST=$(jq -r '.mqtt_host' /data/options.json)
+MQTT_PORT=$(jq -r '.mqtt_port' /data/options.json)
+MQTT_USERNAME=$(jq -r '.mqtt_username' /data/options.json)
+MQTT_PASSWORD=$(jq -r '.mqtt_password' /data/options.json)
+MQTT_BASE_TOPIC=$(jq -r '.mqtt_base_topic' /data/options.json)
 
 # Validate scrapes_per_day
 if [[ "$SCRAPES_PER_DAY" -eq 0 ]]; then
@@ -22,7 +22,7 @@ if [[ "$SCRAPES_PER_DAY" -eq 0 ]]; then
     sleep infinity
 fi
 
-# Calculate interval in seconds
+# Calculate interval
 INTERVAL_HOURS=$(echo "24 / $SCRAPES_PER_DAY" | bc -l)
 INTERVAL_SECONDS=$(printf "%.0f" "$(echo "$INTERVAL_HOURS * 3600" | bc -l)")
 
@@ -36,7 +36,7 @@ echo "[TWN Pollen] MQTT Host: $MQTT_HOST"
 echo "[TWN Pollen] MQTT Port: $MQTT_PORT"
 echo "[TWN Pollen] MQTT Base Topic: $MQTT_BASE_TOPIC"
 
-# Export environment variables for Python
+# Export env vars for Python
 export POLLEN_URL
 export BROWSERLESS_URL
 export DEBUG_MODE

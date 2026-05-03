@@ -8,12 +8,12 @@ LABEL \
 # Install system dependencies
 RUN apk add --no-cache \
     bash \
+    jq \
     chromium \
     chromium-chromedriver \
     nss \
     freetype \
     harfbuzz \
-    ca-certificates \
     ttf-freefont
 
 # Install Python dependencies
@@ -26,7 +26,6 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 WORKDIR /app
 
-# Copy scraper + runner
 COPY twn_pollen_scraper.py .
 COPY run.sh .
 RUN chmod a+x run.sh
