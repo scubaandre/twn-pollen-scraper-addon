@@ -1,4 +1,5 @@
 # Weather Network Pollen Scraper (Home Assistant Add-on)
+# Proof of concept
 
 This Home Assistant add-on scrapes pollen levels, top allergens, and a 3‑day forecast from The Weather Network using Browserless + Pyppeteer.  
 It is designed for HAOS and runs as a long‑lived service, updating pollen data multiple times per day.
