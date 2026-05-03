@@ -1,6 +1,6 @@
 name: "Weather Network Pollen Scraper"
-description: "Scrapes pollen levels, allergens, and 3‑day forecast from The Weather Network using Browserless + Pyppeteer"
-version: "0.1.0"
+description: "Scrapes pollen levels, allergens, and 3‑day forecast from The Weather Network using Browserless + Pyppeteer, publishes to MQTT with auto-discovery."
+version: "0.2.0"
 slug: "twn_pollen_scraper"
 arch:
   - aarch64
@@ -10,13 +10,27 @@ boot: auto
 init: false
 map:
   - "share:rw"
+
 options:
   pollen_url: "https://www.theweathernetwork.com/en/city/ca/ontario/ottawa/pollen"
   scrapes_per_day: 2
   browserless_url: "ws://homeassistant:3000"
   debug_mode: false
+
+  mqtt_host: "homeassistant"
+  mqtt_port: 1883
+  mqtt_username: ""
+  mqtt_password: ""
+  mqtt_base_topic: "home/pollen"
+
 schema:
   pollen_url: "match(^https?://.*$)"
   scrapes_per_day: "int(0,4)"
   browserless_url: "match(^(ws|wss)://.*$)"
   debug_mode: bool
+
+  mqtt_host: "str"
+  mqtt_port: "int"
+  mqtt_username: "str?"
+  mqtt_password: "str?"
+  mqtt_base_topic: "str"

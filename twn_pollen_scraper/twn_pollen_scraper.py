@@ -3,25 +3,102 @@ from pyppeteer import connect
 import json
 import os
 import time
+import paho.mqtt.client as mqtt
 
-# Read environment variables passed from run.sh
+# -----------------------------
+# Environment Variables
+# -----------------------------
 POLLEN_URL = os.getenv("POLLEN_URL")
 BROWSERLESS_URL = os.getenv("BROWSERLESS_URL")
 DEBUG_MODE = os.getenv("DEBUG_MODE", "false").lower() == "true"
 
-OUTPUT_DIR = "/share/pollen"
-CAPTURE_DIR = "/share/pollen/debug"
+MQTT_HOST = os.getenv("MQTT_HOST")
+MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
+MQTT_USERNAME = os.getenv("MQTT_USERNAME")
+MQTT_PASSWORD = os.getenv("MQTT_PASSWORD")
+MQTT_BASE = os.getenv("MQTT_BASE_TOPIC", "home/pollen")
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+DEVICE_NAME = "TWN Pollen"
+DEVICE_ID = "twn_pollen_device"
+
+CAPTURE_DIR = "/share/pollen/debug"
 if DEBUG_MODE:
     os.makedirs(CAPTURE_DIR, exist_ok=True)
 
 
+# -----------------------------
+# Logging Helper
+# -----------------------------
 def log(msg):
     ts = time.strftime("%H:%M:%S")
-    print(f"[Pollen Scraper] {ts} {msg}")
+    print(f"[TWN Pollen] {ts} {msg}")
 
 
+# -----------------------------
+# MQTT Setup
+# -----------------------------
+def mqtt_connect():
+    client = mqtt.Client()
+
+    if MQTT_USERNAME:
+        client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
+
+    client.connect(MQTT_HOST, MQTT_PORT, 60)
+    return client
+
+
+# -----------------------------
+# MQTT Auto-Discovery
+# -----------------------------
+def publish_discovery(client, sensor_id, name, unit=None, icon=None):
+    topic = f"homeassistant/sensor/{DEVICE_ID}/{sensor_id}/config"
+
+    payload = {
+        "name": name,
+        "state_topic": f"{MQTT_BASE}/{sensor_id}",
+        "unique_id": f"{DEVICE_ID}_{sensor_id}",
+        "device": {
+            "identifiers": [DEVICE_ID],
+            "name": DEVICE_NAME,
+            "manufacturer": "The Weather Network",
+            "model": "Pollen Index Scraper"
+        }
+    }
+
+    if unit:
+        payload["unit_of_measurement"] = unit
+    if icon:
+        payload["icon"] = icon
+
+    client.publish(topic, json.dumps(payload), retain=True)
+
+
+def publish_value(client, sensor_id, value):
+    topic = f"{MQTT_BASE}/{sensor_id}"
+    client.publish(topic, value, retain=True)
+
+
+# -----------------------------
+# Scoring Logic (0–5)
+# -----------------------------
+SCORE_MAP = {
+    "Very Low": 1,
+    "Low": 2,
+    "Moderate": 3,
+    "High": 4,
+    "Very High": 5
+}
+
+
+def score_from_level(level):
+    if not level:
+        return 0
+    return SCORE_MAP.get(level, 0)
+
+
+# -----------------------------
+# Scraper Logic
+# -----------------------------
 async def scrape_pollen():
     log(f"Connecting to Browserless at {BROWSERLESS_URL}…")
 
@@ -36,35 +113,31 @@ async def scrape_pollen():
     log(f"Loading page: {POLLEN_URL}")
     await page.goto(POLLEN_URL, {"waitUntil": "domcontentloaded"})
 
-    # Allow React hydration
     await asyncio.sleep(5)
-
-    # Trigger lazy components
     await page.evaluate("window.scrollTo(0, 400);")
     await asyncio.sleep(2)
     await page.evaluate("window.scrollTo(0, 0);")
     await asyncio.sleep(2)
 
-    # Wait for widgets
     log("Waiting for pollen summary widget…")
     await page.waitForSelector('[data-testid="aerobiology-pollen-daily-summary"]', timeout=20000)
 
     log("Waiting for 3-day forecast chart…")
     await page.waitForSelector('[data-testid="pollen-forecast-chart"]', timeout=20000)
 
-    # ---- TODAY'S POLLEN LEVEL ----
+    # Today's level
     today_level = await page.querySelectorEval(
         '[data-testid="pollen-index-meter"] span',
         'el => el.textContent.trim()'
     )
 
-    # ---- TOP ALLERGENS ----
+    # Top allergens
     top_allergens = await page.querySelectorAllEval(
         '[data-testid="top-allergens"] li',
         'els => els.map(el => el.textContent.trim())'
     )
 
-    # ---- FORECAST DAY LABELS ----
+    # Forecast days
     forecast_days = await page.evaluate("""
     () => {
         const root = document.querySelector('[data-testid="pollen-forecast-chart"]');
@@ -83,7 +156,7 @@ async def scrape_pollen():
     }
     """)
 
-    # ---- FORECAST LEVELS FROM SVG PATH COLORS ----
+    # Forecast levels via SVG colors
     forecast_levels = await page.evaluate("""
     () => {
         const root = document.querySelector('[data-testid="pollen-forecast-chart"]');
@@ -108,48 +181,55 @@ async def scrape_pollen():
     }
     """)
 
-    # ---- MERGE DAYS + LEVELS ----
     for i in range(min(len(forecast_days), len(forecast_levels))):
         forecast_days[i]["level"] = forecast_levels[i]
 
-    # ---- STRUCTURED RESULT ----
-    data = {
-        "today": {
-            "level": today_level,
-            "top_allergens": top_allergens,
-        },
-        "forecast": forecast_days,
-        "source": "The Weather Network / Aerobiology Research",
-        "url": POLLEN_URL,
-        "timestamp": time.time()
-    }
-
-    # ---- SAVE OUTPUT ----
-    output_path = f"{OUTPUT_DIR}/pollen_data.json"
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-
-    log(f"Saved pollen data → {output_path}")
-
-    # ---- DEBUG ARTIFACTS ----
     if DEBUG_MODE:
-        log("Debug mode enabled — saving HTML and screenshots…")
+        log("Debug mode enabled — saving screenshots + HTML")
         await page.screenshot(path=f"{CAPTURE_DIR}/viewport.png")
         await page.screenshot(path=f"{CAPTURE_DIR}/fullpage.png", fullPage=True)
-
         html = await page.content()
         with open(f"{CAPTURE_DIR}/page.html", "w", encoding="utf-8") as f:
             f.write(html)
 
     await browser.close()
-    return data
+
+    return today_level, top_allergens, forecast_days
 
 
+# -----------------------------
+# Main Execution
+# -----------------------------
 async def main():
     try:
-        await scrape_pollen()
+        today_level, top_allergens, forecast = await scrape_pollen()
     except Exception as e:
         log(f"ERROR: {e}")
+        return
+
+    client = mqtt_connect()
+
+    # Auto-discovery sensors
+    publish_discovery(client, "today_level", "Pollen Today Level", icon="mdi:flower")
+    publish_discovery(client, "today_score", "Pollen Today Score", unit="score")
+
+    for i in range(3):
+        publish_discovery(client, f"forecast_{i+1}_level", f"Pollen Forecast {i+1} Level", icon="mdi:flower")
+        publish_discovery(client, f"forecast_{i+1}_score", f"Pollen Forecast {i+1} Score", unit="score")
+
+    publish_discovery(client, "top_allergens", "Top Allergens", icon="mdi:biohazard")
+
+    # Publish values
+    publish_value(client, "today_level", today_level)
+    publish_value(client, "today_score", score_from_level(today_level))
+
+    for i, f in enumerate(forecast):
+        publish_value(client, f"forecast_{i+1}_level", f["level"])
+        publish_value(client, f"forecast_{i+1}_score", score_from_level(f["level"]))
+
+    publish_value(client, "top_allergens", json.dumps(top_allergens))
+
+    log("MQTT publish complete.")
 
 
 if __name__ == "__main__":

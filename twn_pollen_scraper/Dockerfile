@@ -2,7 +2,7 @@ FROM python:3.11-alpine3.18
 
 LABEL \
   io.hass.name="Weather Network Pollen Scraper" \
-  io.hass.version="0.1.0" \
+  io.hass.version="0.2.0" \
   io.hass.type="addon"
 
 # Install system dependencies
@@ -17,7 +17,9 @@ RUN apk add --no-cache \
     ttf-freefont
 
 # Install Python dependencies
-RUN pip install --no-cache-dir pyppeteer
+RUN pip install --no-cache-dir \
+    pyppeteer \
+    paho-mqtt
 
 ENV PYTHONUNBUFFERED=1
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
