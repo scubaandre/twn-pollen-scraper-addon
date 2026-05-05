@@ -82,7 +82,7 @@ def publish_value(client, sensor_id, value):
 # Scoring Logic (0–5)
 # -----------------------------
 SCORE_MAP = {
-    "Very Low": 1,
+    "None": 1,
     "Low": 2,
     "Moderate": 3,
     "High": 4,
@@ -166,10 +166,10 @@ async def scrape_pollen():
         const colors = Array.from(paths).map(p => p.getAttribute('fill'));
 
         const map = {
-            '#00AEEF': 'Very Low',
-            '#7CC576': 'Low',
-            '#F7D154': 'Moderate',
-            '#E86C4F': 'High',
+            '#C6C4C0': 'No data',
+            '#97D602': 'None',
+            '#FDCD2E': 'Low',
+            '#E98600': 'Moderate',
             '#DE3E2A': 'High',
             '#9161C9': 'Very High'
         };
@@ -211,11 +211,11 @@ async def main():
 
     # Auto-discovery sensors
     publish_discovery(client, "today_level", "Pollen Today Level", icon="mdi:flower")
-    publish_discovery(client, "today_score", "Pollen Today Score", unit="score")
+    publish_discovery(client, "today_score", "Pollen Today Score")
 
     for i in range(3):
         publish_discovery(client, f"forecast_{i+1}_level", f"Pollen Forecast {i+1} Level", icon="mdi:flower")
-        publish_discovery(client, f"forecast_{i+1}_score", f"Pollen Forecast {i+1} Score", unit="score")
+        publish_discovery(client, f"forecast_{i+1}_score", f"Pollen Forecast {i+1} Score")
 
     publish_discovery(client, "top_allergens", "Top Allergens", icon="mdi:biohazard")
 
