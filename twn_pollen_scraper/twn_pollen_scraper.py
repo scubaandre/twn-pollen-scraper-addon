@@ -6,7 +6,7 @@ import time
 import paho.mqtt.client as mqtt
 
 # -----------------------------
-# Environment Variables
+# Environment Variables. 
 # -----------------------------
 POLLEN_URL = os.getenv("POLLEN_URL")
 BROWSERLESS_URL = os.getenv("BROWSERLESS_URL")
