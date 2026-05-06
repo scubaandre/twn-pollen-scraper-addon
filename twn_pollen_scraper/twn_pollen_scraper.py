@@ -38,7 +38,7 @@ def log(msg):
 # MQTT Setup
 # -----------------------------
 def mqtt_connect():
-    client = mqtt.Client()
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1) # Adding forced V1 api until additionnal changes are in place
 
     if MQTT_USERNAME:
         client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
