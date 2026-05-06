@@ -2,7 +2,7 @@ FROM python:3.11-alpine3.18
 
 LABEL \
   io.hass.name="Weather Network Pollen Scraper" \
-  io.hass.version="0.2.2" \
+  io.hass.version="0.2.3" \
   io.hass.type="addon"
 
 # Install system dependencies
