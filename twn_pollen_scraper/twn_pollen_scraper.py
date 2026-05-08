@@ -1,9 +1,12 @@
 import asyncio
-from pyppeteer import connect
 import json
+import logging
 import os
+from datetime import datetime, timedelta
+
 import time
 import paho.mqtt.client as mqtt
+from pyppeteer import connect
 
 # -----------------------------
 # Environment Variables. 
@@ -22,22 +25,28 @@ DEVICE_NAME = "TWN Pollen"
 DEVICE_ID = "twn_pollen_device"
 
 CAPTURE_DIR = "/share/pollen/debug"
+
+# -----------------------------
+# LOGGER Setup
+# -----------------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format=f"%(asctime)s - [v{VERSION}] - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
+
 if DEBUG_MODE:
+    logger.setLevel(logging.DEBUG)
+    logger.debug("Debug mode enabled: Detailed logs will be shown.")
     os.makedirs(CAPTURE_DIR, exist_ok=True)
-
-
-# -----------------------------
-# Logging Helper
-# -----------------------------
-def log(msg):
-    ts = time.strftime("%H:%M:%S")
-    print(f"[TWN Pollen] {ts} {msg}")
-
+else:
+    logger.setLevel(logging.INFO)
 
 # -----------------------------
 # MQTT Setup
 # -----------------------------
 def mqtt_connect():
+    logger.debug("Connecting to MQTT.")
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1) # Adding forced V1 api until additionnal changes are in place
 
     if MQTT_USERNAME:
@@ -46,11 +55,11 @@ def mqtt_connect():
     client.connect(MQTT_HOST, MQTT_PORT, 60)
     return client
 
-
 # -----------------------------
 # MQTT Auto-Discovery
 # -----------------------------
 def publish_discovery(client, sensor_id, name, unit=None, icon=None):
+    logger.debug("Publishing autodiscovery to MQTT.")
     topic = f"homeassistant/sensor/{DEVICE_ID}/{sensor_id}/config"
 
     payload = {
@@ -74,6 +83,7 @@ def publish_discovery(client, sensor_id, name, unit=None, icon=None):
 
 
 def publish_value(client, sensor_id, value):
+    logger.debug("Publishing values to MQTT.")
     topic = f"{MQTT_BASE}/{sensor_id}"
     client.publish(topic, value, retain=True)
 
@@ -92,6 +102,7 @@ SCORE_MAP = {
 
 def score_from_level(level):
     if not level:
+        logger.debug("Using default value for pollen level.")
         return 0
     return SCORE_MAP.get(level, 0)
 
@@ -100,7 +111,7 @@ def score_from_level(level):
 # Scraper Logic
 # -----------------------------
 async def scrape_pollen():
-    log(f"Connecting to Browserless at {BROWSERLESS_URL}…")
+    logger.info("Connecting to Browserless at {BROWSERLESS_URL}…")
 
     browser = await connect({
         "browserWSEndpoint": BROWSERLESS_URL,
@@ -109,8 +120,8 @@ async def scrape_pollen():
 
     page = await browser.newPage()
     page.setDefaultNavigationTimeout(90000)
-
-    log(f"Loading page: {POLLEN_URL}")
+    logger.info("Loading page and capturing information…")
+    logger.debug(Loading page: {POLLEN_URL}")
     await page.goto(POLLEN_URL, {"waitUntil": "domcontentloaded"})
 
     await asyncio.sleep(5)
@@ -119,25 +130,28 @@ async def scrape_pollen():
     await page.evaluate("window.scrollTo(0, 0);")
     await asyncio.sleep(2)
 
-    log("Waiting for pollen summary widget…")
+    logger.debug("Waiting for pollen summary widget…")
     await page.waitForSelector('[data-testid="aerobiology-pollen-daily-summary"]', timeout=20000)
 
-    log("Waiting for 3-day forecast chart…")
+    logger.debug("Waiting for 3-day forecast chart…")
     await page.waitForSelector('[data-testid="pollen-forecast-chart"]', timeout=20000)
 
     # Today's level
+    logger.debug("Waiting for today's level")
     today_level = await page.querySelectorEval(
         '[data-testid="pollen-index-meter"] span',
         'el => el.textContent.trim()'
     )
 
     # Top allergens
+    logger.debug("Waiting for allergens")
     top_allergens = await page.querySelectorAllEval(
         '[data-testid="top-allergens"] li',
         'els => els.map(el => el.textContent.trim())'
     )
 
     # Forecast days
+    logger.debug("Waiting for forecast")
     forecast_days = await page.evaluate("""
     () => {
         const root = document.querySelector('[data-testid="pollen-forecast-chart"]');
@@ -157,6 +171,7 @@ async def scrape_pollen():
     """)
 
     # Forecast levels via SVG colors
+    logger.debug("Capturing forecast")
     forecast_levels = await page.evaluate("""
     () => {
         const root = document.querySelector('[data-testid="pollen-forecast-chart"]');
@@ -185,7 +200,7 @@ async def scrape_pollen():
         forecast_days[i]["level"] = forecast_levels[i]
 
     if DEBUG_MODE:
-        log("Debug mode enabled — saving screenshots + HTML")
+        logger.debug("Debug mode enabled — saving screenshots + HTML")
         await page.screenshot(path=f"{CAPTURE_DIR}/viewport.png")
         await page.screenshot(path=f"{CAPTURE_DIR}/fullpage.png", fullPage=True)
         html = await page.content()
