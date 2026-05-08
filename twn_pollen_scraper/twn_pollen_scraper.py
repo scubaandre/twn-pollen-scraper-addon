@@ -11,6 +11,8 @@ from pyppeteer import connect
 # -----------------------------
 # Environment Variables. 
 # -----------------------------
+VERSION = "0.2.5"
+
 POLLEN_URL = os.getenv("POLLEN_URL")
 BROWSERLESS_URL = os.getenv("BROWSERLESS_URL")
 DEBUG_MODE = os.getenv("DEBUG_MODE", "false").lower() == "true"
@@ -92,11 +94,11 @@ def publish_value(client, sensor_id, value):
 # Scoring Logic (0–5)
 # -----------------------------
 SCORE_MAP = {
-    "None": 1,
-    "Low": 2,
-    "Moderate": 3,
-    "High": 4,
-    "Very High": 5
+    "None": 0,
+    "Low": 1,
+    "Moderate": 2,
+    "High": 3,
+    "Very High": 4
 }
 
 
@@ -111,7 +113,7 @@ def score_from_level(level):
 # Scraper Logic
 # -----------------------------
 async def scrape_pollen():
-    logger.info("Connecting to Browserless at {BROWSERLESS_URL}…")
+    logger.info(f"Connecting to Browserless at {BROWSERLESS_URL}…")
 
     browser = await connect({
         "browserWSEndpoint": BROWSERLESS_URL,
@@ -121,7 +123,7 @@ async def scrape_pollen():
     page = await browser.newPage()
     page.setDefaultNavigationTimeout(90000)
     logger.info("Loading page and capturing information…")
-    logger.debug(Loading page: {POLLEN_URL}")
+    logger.debug(f"Loading page: {POLLEN_URL}")
     await page.goto(POLLEN_URL, {"waitUntil": "domcontentloaded"})
 
     await asyncio.sleep(5)
@@ -219,7 +221,7 @@ async def main():
     try:
         today_level, top_allergens, forecast = await scrape_pollen()
     except Exception as e:
-        log(f"ERROR: {e}")
+        logger.error(f"ERROR: {e}")
         return
 
     client = mqtt_connect()
@@ -244,7 +246,7 @@ async def main():
 
     publish_value(client, "top_allergens", json.dumps(top_allergens))
 
-    log("MQTT publish complete.")
+    logger.debug("MQTT publish complete.")
 
 
 if __name__ == "__main__":
